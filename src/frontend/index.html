@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat WebSocket Rust</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="chat-container">
+    <header class="chat-header">
+      <h1>Chat WebSocket</h1>
+      <span id="status" class="status desconectado">Desconectado</span>
+    </header>
+
+    <div id="mensagens" class="mensagens"></div>
+
+    <form id="form-chat" class="input-area">
+      <input type="text" id="input-msg" placeholder="Digite seu apelido ou mensagem..." autocomplete="off" required>
+      <button type="submit" id="btn-enviar" disabled>Enviar</button>
+      <button type="button" id="btn-usuarios" disabled>/usuarios</button>
+    </form>
+  </div>
+
+  <script>
+    const ws = new WebSocket("ws://127.0.0.1:8080");
+    const boxMensagens = document.getElementById("mensagens");
+    const form = document.getElementById("form-chat");
+    const input = document.getElementById("input-msg");
+    const statusEl = document.getElementById("status");
+    const btnEnviar = document.getElementById("btn-enviar");
+    const btnUsuarios = document.getElementById("btn-usuarios");
+
+    let apelidoDefinido = false;
+
+    function adicionarMensagem(texto, tipo = "recebida") {
+      const div = document.createElement("div");
+      div.className = `msg ${tipo}`;
+      div.textContent = texto;
+      boxMensagens.appendChild(div);
+      boxMensagens.scrollTop = boxMensagens.scrollHeight;
+    }
+
+    ws.onopen = () => {
+      statusEl.textContent = "Conectado";
+      statusEl.className = "status conectado";
+      btnEnviar.disabled = false;
+      btnUsuarios.disabled = false;
+      input.focus();
+    };
+
+    ws.onmessage = (event) => {
+      if (event.data.startsWith("Esse apelido já está em uso")) {
+        apelidoDefinido = false;
+        input.placeholder = "Escolha outro apelido...";
+        adicionarMensagem(event.data, "sistema");
+        return;
+      }
+
+      const tipo = event.data.includes("Sistema:") || event.data.startsWith("Usuários online:") || event.data.startsWith("Bem-vindo")
+        ? "sistema"
+        : "recebida";
+      adicionarMensagem(event.data, tipo);
+    };
+
+    ws.onclose = () => {
+      statusEl.textContent = "Desconectado";
+      statusEl.className = "status desconectado";
+      btnEnviar.disabled = true;
+      btnUsuarios.disabled = true;
+      adicionarMensagem("Conexão encerrada pelo servidor.", "sistema");
+    };
+
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const texto = input.value.trim();
+      if (!texto || ws.readyState !== WebSocket.OPEN) return;
+
+      ws.send(texto);
+
+      if (!apelidoDefinido) {
+        apelidoDefinido = true;
+        input.placeholder = "Digite sua mensagem...";
+        adicionarMensagem(`Você entrou como: ${texto}`, "sistema");
+      } else if (texto !== "/usuarios" && texto !== "/sair") {
+        const hora = new Date().toLocaleTimeString("pt-BR", { hour12: false });
+        adicionarMensagem(`[${hora}] Você: ${texto}`, "enviada");
+      }
+
+      input.value = "";
+    });
+
+    btnUsuarios.addEventListener("click", () => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send("/usuarios");
+      }
+    });
+  </script>
+</body>
+</html>
